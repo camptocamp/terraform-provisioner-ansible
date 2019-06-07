@@ -42,50 +42,112 @@ func validateFn(c *terraform.ResourceConfig) (ws []string, es []error) {
 
 	validPlaysCount := 0
 
+	// Workaround to enable backward compatibility
+	var computedTfVersion string
 	if plays, hasPlays := c.Get("plays"); hasPlays {
-		for _, vPlay := range plays.([]map[string]interface{}) {
+		switch plays.(type) {
+		case []interface{}:
+			computedTfVersion = "0.12"
+		case map[string]interface{}:
+			computedTfVersion = "0.11"
+		}
+	}
 
-			currentErrorCount := len(es)
+	if computedTfVersion == "0.12" {
 
-			vPlaybook, playHasPlaybook := vPlay["playbook"]
-			_, playHasModule := vPlay["module"]
+		if plays, hasPlays := c.Get("plays"); hasPlays {
+			for _, rawVPlay := range plays.([]interface{}) {
+				vPlay := rawVPlay.(map[string]interface{})
 
-			if playHasPlaybook && playHasModule {
-				es = append(es, fmt.Errorf("playbook and module can't be used together"))
-			} else if !playHasPlaybook && !playHasModule {
-				es = append(es, fmt.Errorf("playbook or module must be set"))
-			} else {
+				currentErrorCount := len(es)
 
-				if playHasPlaybook {
-					vPlaybookTyped := vPlaybook.([]map[string]interface{})
-					rolesPath, hasRolesPath := vPlaybookTyped[0]["roles_path"]
-					if hasRolesPath {
-						for _, singlePath := range rolesPath.([]interface{}) {
-							vws, ves := types.VfPathDirectory(singlePath, "roles_path")
+				vPlaybook, playHasPlaybook := vPlay["playbook"]
+				_, playHasModule := vPlay["module"]
 
-							for _, w := range vws {
-								ws = append(ws, w)
-							}
-							for _, e := range ves {
-								es = append(es, e)
+				if playHasPlaybook && playHasModule {
+					es = append(es, fmt.Errorf("playbook and module can't be used together"))
+				} else if !playHasPlaybook && !playHasModule {
+					es = append(es, fmt.Errorf("playbook or module must be set"))
+				} else {
+
+					if playHasPlaybook {
+						vPlaybookTyped := vPlaybook.([]interface{})
+						rolesPath, hasRolesPath := vPlaybookTyped[0].(map[string]interface{})["roles_path"]
+						if hasRolesPath {
+							for _, singlePath := range rolesPath.([]interface{}) {
+								vws, ves := types.VfPathDirectory(singlePath, "roles_path")
+
+								for _, w := range vws {
+									ws = append(ws, w)
+								}
+								for _, e := range ves {
+									es = append(es, e)
+								}
 							}
 						}
 					}
+
 				}
 
+				if currentErrorCount == len(es) {
+					validPlaysCount++
+				}
 			}
 
-			if currentErrorCount == len(es) {
-				validPlaysCount++
+			if validPlaysCount == 0 {
+				ws = append(ws, "nothing to play")
 			}
-		}
 
-		if validPlaysCount == 0 {
+		} else {
 			ws = append(ws, "nothing to play")
 		}
 
 	} else {
-		ws = append(ws, "nothing to play")
+
+		if plays, hasPlays := c.Get("plays"); hasPlays {
+			for _, vPlay := range plays.([]map[string]interface{}) {
+				currentErrorCount := len(es)
+
+				vPlaybook, playHasPlaybook := vPlay["playbook"]
+				_, playHasModule := vPlay["module"]
+
+				if playHasPlaybook && playHasModule {
+					es = append(es, fmt.Errorf("playbook and module can't be used together"))
+				} else if !playHasPlaybook && !playHasModule {
+					es = append(es, fmt.Errorf("playbook or module must be set"))
+				} else {
+
+					if playHasPlaybook {
+						vPlaybookTyped := vPlaybook.([]map[string]interface{})
+						rolesPath, hasRolesPath := vPlaybookTyped[0]["roles_path"]
+						if hasRolesPath {
+							for _, singlePath := range rolesPath.([]interface{}) {
+								vws, ves := types.VfPathDirectory(singlePath, "roles_path")
+
+								for _, w := range vws {
+									ws = append(ws, w)
+								}
+								for _, e := range ves {
+									es = append(es, e)
+								}
+							}
+						}
+					}
+
+				}
+
+				if currentErrorCount == len(es) {
+					validPlaysCount++
+				}
+			}
+
+			if validPlaysCount == 0 {
+				ws = append(ws, "nothing to play")
+			}
+
+		} else {
+			ws = append(ws, "nothing to play")
+		}
 	}
 
 	return ws, es
